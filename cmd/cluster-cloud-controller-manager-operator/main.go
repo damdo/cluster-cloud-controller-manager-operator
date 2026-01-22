@@ -17,6 +17,8 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"os"
@@ -47,6 +49,7 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
+	utiltls "github.com/openshift/library-go/pkg/controllerruntime/tls"
 	"github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 	"github.com/openshift/library-go/pkg/operator/events"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -84,8 +87,14 @@ func main() {
 
 	metricsAddr := flag.String(
 		"metrics-bind-address",
-		":8080",
+		":9258",
 		"Address for hosting metrics",
+	)
+
+	webhookPort := flag.Int(
+		"webhook-port",
+		9443,
+		"Webhook Server port",
 	)
 
 	healthAddr := flag.String(
@@ -121,13 +130,38 @@ func main() {
 		LeaseDuration: leaderElectionConfig.LeaseDuration,
 	})
 
-	ctx := ctrl.SetupSignalHandler()
+	// Create a cancellable context so the TLS controller can trigger a shutdown
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	// Ensure the context is cancelled when the program exits.
+	defer cancel()
+
+	k8sClient, err := client.New(restConfig, client.Options{Scheme: scheme})
+	if err != nil {
+		setupLog.Error(err, "unable to create Kubernetes client")
+		os.Exit(1)
+	}
+
+	// Fetch the TLS profile from the APIServer resource.
+	tlsProfileSpec, err := utiltls.FetchAPIServerTLSProfile(ctx, k8sClient)
+	if err != nil {
+		setupLog.Error(err, "unable to get TLS profile from API server")
+		os.Exit(1)
+	}
+
+	// Create the TLS configuration function for the server endpoints.
+	tlsConfigFunc, unsupportedCiphers := utiltls.NewTLSConfigFromProfile(tlsProfileSpec)
+	if len(unsupportedCiphers) > 0 {
+		setupLog.Info("Some ciphers from TLS profile are not supported", "unsupportedCiphers", unsupportedCiphers)
+	}
+	tlsOpts := []func(*tls.Config){tlsConfigFunc}
 
 	syncPeriod := 10 * time.Minute
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress: *metricsAddr,
+			BindAddress:   *metricsAddr,
+			SecureServing: true,
+			TLSOpts:       tlsOpts,
 		},
 		Cache: cache.Options{
 			// For roles/rolebindings specifically, we need to also watch kube-system.
@@ -152,7 +186,8 @@ func main() {
 		},
 		WebhookServer: &webhook.DefaultServer{
 			Options: webhook.Options{
-				Port: 9443,
+				Port:    *webhookPort,
+				TLSOpts: tlsOpts,
 			},
 		},
 		HealthProbeBindAddress:  *healthAddr,
@@ -231,6 +266,17 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterOperator")
 		os.Exit(1)
 	}
+
+	// Set up the TLS security profile watcher to watch for TLS config changes
+	if err = (&utiltls.TLSSecurityProfileWatcher{
+		Client:                mgr.GetClient(),
+		InitialTLSProfileSpec: tlsProfileSpec,
+		Shutdown:              cancel,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TLSSecurityProfileWatcher")
+		os.Exit(1)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {

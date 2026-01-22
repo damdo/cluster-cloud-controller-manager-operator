@@ -46,6 +46,7 @@ rules:
   - featuregates
   - networks
   - proxies
+  - apiservers
   verbs:
   - get
   - list
