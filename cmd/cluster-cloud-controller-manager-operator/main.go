@@ -190,13 +190,14 @@ func main() {
 				TLSOpts: tlsOpts,
 			},
 		},
-		HealthProbeBindAddress:  *healthAddr,
-		LeaderElectionNamespace: leaderElectionConfig.ResourceNamespace,
-		LeaderElection:          leaderElectionConfig.LeaderElect,
-		LeaderElectionID:        leaderElectionConfig.ResourceName,
-		LeaseDuration:           &le.LeaseDuration.Duration,
-		RetryPeriod:             &le.RetryPeriod.Duration,
-		RenewDeadline:           &le.RenewDeadline.Duration,
+		HealthProbeBindAddress:        *healthAddr,
+		LeaderElectionReleaseOnCancel: true,
+		LeaderElectionNamespace:       leaderElectionConfig.ResourceNamespace,
+		LeaderElection:                leaderElectionConfig.LeaderElect,
+		LeaderElectionID:              leaderElectionConfig.ResourceName,
+		LeaseDuration:                 &le.LeaseDuration.Duration,
+		RetryPeriod:                   &le.RetryPeriod.Duration,
+		RenewDeadline:                 &le.RenewDeadline.Duration,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
