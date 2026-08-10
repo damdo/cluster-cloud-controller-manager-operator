@@ -77,7 +77,6 @@ The test suite is organized into separate sub-projects, each with independent de
 
 ### Feature Gates Tested
 
-- `AWSServiceLBNetworkSecurityGroup` - Managed security groups for NLBs
 - `VSphereMixedNodeEnv` - Platform-type node labels on vSphere
 
 ## Development

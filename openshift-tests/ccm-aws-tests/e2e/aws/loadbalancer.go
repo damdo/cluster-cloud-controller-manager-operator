@@ -23,23 +23,16 @@ import (
 const (
 	e2eTestPrefixLoadBalancer = "[cloud-provider-aws-e2e-openshift] loadbalancer"
 
-	// featureGateAWSServiceLBNetworkSecurityGroup is the name of the feature gate
-	// that enables managed security groups for Network Load Balancers.
-	//
-	// Future improvement: Use typed constant from github.com/openshift/api/features
-	// when available: features.FeatureGateAWSServiceLBNetworkSecurityGroup
+	// featureGateAWSServiceLBNetworkSecurityGroup is the name of the former feature gate
+	// that enabled managed security groups for Network Load Balancers.
+	// The feature is now GA and always enabled; the constant is kept for test naming stability.
 	featureGateAWSServiceLBNetworkSecurityGroup = "AWSServiceLBNetworkSecurityGroup"
 
 	annotationLBType = "service.beta.kubernetes.io/aws-load-balancer-type"
 )
 
-// TestAWSServiceLBNetworkSecurityGroup validates the AWSServiceLBNetworkSecurityGroup feature gate functionality.
-//
-// This test suite validates that Network Load Balancers (NLB) are properly configured with security groups
-// when the AWSServiceLBNetworkSecurityGroup feature gate is enabled. This feature allows the cloud controller
-// to manage security groups for NLB services, improving security posture and reducing manual configuration.
-//
-// All tests automatically skip if the AWSServiceLBNetworkSecurityGroup feature gate is not enabled.
+// TestAWSServiceLBNetworkSecurityGroup validates that Network Load Balancers (NLB) are properly
+// configured with managed security groups. This feature is now GA and always enabled.
 var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBalancer, featureGateAWSServiceLBNetworkSecurityGroup), func() {
 	f := framework.NewDefaultFramework("cloud-provider-aws")
 	f.NamespacePodSecurityEnforceLevel = admissionapi.LevelPrivileged
@@ -52,31 +45,10 @@ var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBala
 		ns = f.Namespace
 	})
 
-	// Checker function to verify if the feature gate is enabled for the group of tests for feature AWSServiceLBNetworkSecurityGroup.
-	isNLBFeatureEnabled := func(ctx context.Context) {
-		By(fmt.Sprintf("checking if %s feature gate is enabled", featureGateAWSServiceLBNetworkSecurityGroup))
-		featureEnabled, err := isFeatureEnabled(ctx, featureGateAWSServiceLBNetworkSecurityGroup)
-		framework.ExpectNoError(err, fmt.Sprintf("failed to check if %s feature is enabled", featureGateAWSServiceLBNetworkSecurityGroup))
-		if !featureEnabled {
-			Skip(fmt.Sprintf("%s feature gate is not enabled", featureGateAWSServiceLBNetworkSecurityGroup))
-		}
-	}
-
 	// Test: [cloud-provider-aws-e2e-openshift] loadbalancer NLB [OCPFeatureGate:AWSServiceLBNetworkSecurityGroup] should have NLBSecurityGroupMode with 'Managed' value in cloud-config
 	//
-	// Validates that the cloud controller manager's configuration contains the proper NLBSecurityGroupMode setting
-	// when the AWSServiceLBNetworkSecurityGroup feature gate is enabled.
-	//
-	// Prerequisites:
-	//   - AWSServiceLBNetworkSecurityGroup feature gate is enabled
-	//
-	// Expected Results:
-	//   - ConfigMap exists and contains cloud.conf key
-	//   - Configuration includes: NLBSecurityGroupMode set to 'Managed'
-	//	 - The test must fail if the feature gate is enabled and the configuration does not include NLBSecurityGroupMode set to 'Managed'
-	//   - The test must skip if the feature gate is not enabled
+	// Validates that the cloud controller manager's configuration contains NLBSecurityGroupMode set to 'Managed'.
 	It("should have NLBSecurityGroupMode with 'Managed value in cloud-config", func(ctx context.Context) {
-		isNLBFeatureEnabled(ctx)
 		common.SkipIfManagementClusterTestsDisabled()
 
 		By("getting cloud-config ConfigMap")
@@ -87,7 +59,7 @@ var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBala
 		managed, err := common.IsNLBSecurityGroupModeManaged(cm)
 		framework.ExpectNoError(err, "failed to check NLBSecurityGroupMode in cloud-config")
 		Expect(managed).To(BeTrue(),
-			"NLBSecurityGroupMode must be set to 'Managed' in cloud-config when feature gate is enabled")
+			"NLBSecurityGroupMode must be set to 'Managed' in cloud-config")
 
 		framework.Logf("Successfully validated cloud-config contains NLBSecurityGroupMode = Managed")
 	})
@@ -95,19 +67,14 @@ var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBala
 	// Test: [cloud-provider-aws-e2e-openshift] loadbalancer NLB [OCPFeatureGate:AWSServiceLBNetworkSecurityGroup] should create NLB service with security group attached
 	//
 	// Creates a new Service type loadBalancer Network Load Balancer (NLB) and validates that security groups are
-	// automatically attached to the NLB when the AWSServiceLBNetworkSecurityGroup feature is enabled.
-	//
-	// Prerequisites:
-	//   - AWSServiceLBNetworkSecurityGroup feature gate is enabled
+	// automatically attached to the NLB.
 	//
 	// Expected Results:
 	//   - Service type loadBalancer Network Load Balancer (NLB) is created successfully
 	//   - Backend pods start and become ready
 	//   - Load balancer has one or more security groups attached when NLBSecurityGroupMode = Managed
-	//   - The test must fail if the feature gate is enabled and the NLB does not have security groups attached
-	//   - The test must skip if the feature gate is not enabled
+	//   - The test must fail if the NLB does not have security groups attached
 	It("should create NLB service with security group attached", func(ctx context.Context) {
-		isNLBFeatureEnabled(ctx)
 
 		By("creatomg required AWS clients")
 		elbClient, err := createAWSClientLoadBalancer(ctx)
@@ -140,10 +107,9 @@ var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBala
 	// Test: [cloud-provider-aws-e2e-openshift] loadbalancer NLB [OCPFeatureGate:AWSServiceLBNetworkSecurityGroup] should have security groups attached to default ingress controller NLB
 	//
 	// Validates that the default OpenShift ingress controller's Service type loadBalancer Network Load Balancer (NLB) has security groups
-	// attached when the AWSServiceLBNetworkSecurityGroup feature is enabled and the router uses NLB type.
+	// attached and the router uses NLB type.
 	//
 	// Prerequisites:
-	//   - AWSServiceLBNetworkSecurityGroup feature gate is enabled
 	//   - The default ingress controller is using NLB type
 	//
 	// Expected Result:
@@ -154,7 +120,6 @@ var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBala
 	//
 	// Note: Skips if the default ingress controller is not using NLB type
 	It("should have security groups attached to default ingress controller NLB", func(ctx context.Context) {
-		isNLBFeatureEnabled(ctx)
 
 		By("creatomg required AWS clients")
 		elbClient, err := createAWSClientLoadBalancer(ctx)
@@ -231,9 +196,6 @@ var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBala
 	// Creates a Service type loadBalancer Network Load Balancer (NLB), modifies the service specification,
 	// and validates that security groups remain attached after the update.
 	//
-	// Prerequisites:
-	//   - AWSServiceLBNetworkSecurityGroup feature gate is enabled
-	//
 	// Expected Results:
 	//   - Service type loadBalancer Network Load Balancer (NLB) is created successfully
 	//   - Load balancer has security groups attached before update
@@ -242,7 +204,6 @@ var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBala
 	//   - Security group rules are updated to include the new port 443
 	//   - The test must fail if security groups are removed after service update
 	It("should update security group rules when service is updated", func(ctx context.Context) {
-		isNLBFeatureEnabled(ctx)
 
 		By("creatomg required AWS clients")
 		ec2Client, err := createAWSClientEC2(ctx)
@@ -342,18 +303,13 @@ var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBala
 	// Creates a Service type loadBalancer Network Load Balancer (NLB), captures the attached security group IDs,
 	// deletes the service, and validates that the managed security groups are properly cleaned up.
 	//
-	// Prerequisites:
-	//   - AWSServiceLBNetworkSecurityGroup feature gate is enabled
-	//
 	// Expected Results:
 	//   - Service type loadBalancer Network Load Balancer (NLB) is created successfully
 	//   - Load balancer has security groups attached
 	//   - After service deletion, load balancer is removed
 	//   - Managed security groups are cleaned up (deleted or detached)
 	//   - The test must fail if managed security groups are not cleaned up
-	//   - The test must skip if the feature gate is not enabled
 	It("should cleanup security groups when service is deleted", func(ctx context.Context) {
-		isNLBFeatureEnabled(ctx)
 
 		By("creatomg required AWS clients")
 		ec2Client, err := createAWSClientEC2(ctx)
@@ -425,18 +381,13 @@ var _ = Describe(fmt.Sprintf("%s NLB [OCPFeatureGate:%s]", e2eTestPrefixLoadBala
 	// Creates a Service type loadBalancer Network Load Balancer (NLB) and validates that the attached
 	// security group has the correct ingress rules matching the service port specifications.
 	//
-	// Prerequisites:
-	//   - AWSServiceLBNetworkSecurityGroup feature gate is enabled
-	//
 	// Expected Results:
 	//   - Service type loadBalancer Network Load Balancer (NLB) is created successfully
 	//   - Load balancer has security groups attached
 	//   - Security group ingress rules match the service port specifications
 	//   - Security group rules allow traffic for all defined service ports
 	//   - The test must fail if security group rules don't match service ports
-	//   - The test must skip if the feature gate is not enabled
 	It("should have correct security group rules for service ports", func(ctx context.Context) {
-		isNLBFeatureEnabled(ctx)
 
 		By("creatomg required AWS clients")
 		ec2Client, err := createAWSClientEC2(ctx)

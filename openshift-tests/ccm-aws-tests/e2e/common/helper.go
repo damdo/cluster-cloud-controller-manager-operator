@@ -93,7 +93,7 @@ func GetKubeClient(ctx context.Context) (clientset.Interface, error) {
 //
 // Parameters:
 //   - ctx: Context for the API call
-//   - featureName: Name of the feature gate to check (e.g., "AWSServiceLBNetworkSecurityGroup")
+//   - featureName: Name of the feature gate to check (e.g., "VSphereMixedNodeEnv")
 //
 // Returns:
 //   - bool: true if the feature is enabled, false if disabled or not found

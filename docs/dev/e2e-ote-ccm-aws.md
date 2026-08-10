@@ -100,10 +100,10 @@ pattern, use process substitution so that each invocation gets its own stdin:
 ```sh
 BIN=./openshift-tests/bin/cloud-controller-manager-aws-tests-ext
 
-# Run all AWSServiceLBNetworkSecurityGroup tests
+# Run all NLB security group tests
 while IFS= read -r t; do
   echo "=== Running: $t"; $BIN run-test "$t" < /dev/null
-done < <($BIN list tests | jq -r '.[].name' | grep "AWSServiceLBNetworkSecurityGroup")
+done < <($BIN list tests | jq -r '.[].name' | grep "NLB")
 
 # Run all upstream loadbalancer tests
 while IFS= read -r t; do
@@ -127,7 +127,7 @@ run_test(){
     while IFS= read -r t; do
     echo "=== Running: $t";
     $BIN run-test "$t" < /dev/null;
-done < <($BIN list tests | jq -r '.[].name' | grep "AWSServiceLBNetworkSecurityGroup"); }
+done < <($BIN list tests | jq -r '.[].name' | grep "NLB"); }
 
 run_test | tee -a e2e-ote.log
 
@@ -137,7 +137,7 @@ grep -E "(name\"\:|\"result\")" e2e-ote.log
 ### Run a specific test (HyperShift hosted cluster)
 
 When running against a HyperShift hosted cluster, `KUBECONFIG` must point to the
-**guest** (hosted) cluster. Additionally, the AWSServiceLBNetworkSecurityGroup
+**guest** (hosted) cluster. Additionally, the NLB security group
 tests need access to the management cluster to validate the CCM cloud-config,
 which lives in the hosted control plane namespace.
 

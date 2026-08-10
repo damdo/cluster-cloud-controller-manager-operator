@@ -125,23 +125,6 @@ func marshalAWSConfig(cfg *awsconfig.CloudConfig) (string, error) {
 	return buf.String(), nil
 }
 
-// isFeatureGateEnabled safely checks if a feature gate is enabled without panicking
-// if the feature is not registered. Returns false if features is nil or if the
-// feature is not in the known features list.
-func isFeatureGateEnabled(features featuregates.FeatureGate, featureName string) bool {
-	// features.Enabled returns panic if the feature is not registered in FeatureGates,
-	// this functions prevents the panic by returning false if the feature is not registered in FeatureGates.
-	if features == nil || len(featureName) == 0 {
-		return false
-	}
-	for _, known := range features.KnownFeatures() {
-		if string(known) == featureName {
-			return features.Enabled(known)
-		}
-	}
-	return false
-}
-
 func setOpenShiftDefaults(cfg *awsconfig.CloudConfig, features featuregates.FeatureGate) {
 	if cfg.Global.ClusterServiceLoadBalancerHealthProbeMode == "" {
 		// OpenShift uses Shared mode by default.
@@ -149,13 +132,8 @@ func setOpenShiftDefaults(cfg *awsconfig.CloudConfig, features featuregates.Feat
 		// health check endpoint served by OVN.
 		cfg.Global.ClusterServiceLoadBalancerHealthProbeMode = "Shared"
 	}
-	if isFeatureGateEnabled(features, "AWSServiceLBNetworkSecurityGroup") {
-		if cfg.Global.NLBSecurityGroupMode != awsconfig.NLBSecurityGroupModeManaged {
-			// When the feature gate AWSServiceLBNetworkSecurityGroup is enabled,
-			// OpenShift configures the AWS CCM to manage security groups for
-			// Network Load Balancer (NLB) Services.
-			klog.Infof("Enforcing cloud provider AWS configuration NLBSecurityGroupMode to Managed")
-			cfg.Global.NLBSecurityGroupMode = awsconfig.NLBSecurityGroupModeManaged
-		}
+	if cfg.Global.NLBSecurityGroupMode != awsconfig.NLBSecurityGroupModeManaged {
+		klog.Infof("Enforcing cloud provider AWS configuration NLBSecurityGroupMode to Managed")
+		cfg.Global.NLBSecurityGroupMode = awsconfig.NLBSecurityGroupModeManaged
 	}
 }

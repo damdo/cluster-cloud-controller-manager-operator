@@ -119,12 +119,6 @@ func findAWSLoadBalancerByDNSName(ctx context.Context, elbClient *elbv2.Client, 
 	return nil, nil
 }
 
-// isFeatureEnabled is a convenience wrapper around common.IsFeatureEnabled.
-// Deprecated: Use common.IsFeatureEnabled directly instead.
-func isFeatureEnabled(ctx context.Context, featureName string) (bool, error) {
-	return common.IsFeatureEnabled(ctx, featureName)
-}
-
 // createAWSClientEC2 creates an AWS EC2 client using default credentials configured in the environment.
 // It forces the public regional endpoint to avoid VPC private endpoint DNS
 // resolution issues when running from a management cluster (HyperShift).
